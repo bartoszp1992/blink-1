@@ -2,8 +2,8 @@
  * main.c
  *
  *  Created on: 12 lut 2018
- *      Author: bartosz
- *     	Ampera HALL
+ *      Author: Bartosz Pracz
+ *     	blink-1 ESC
  *
  *      v0.3 - correct throttle scale
  *      v0.4 - only high side on PWM
