@@ -2,8 +2,8 @@
  * main.c
  *
  *  Created on: 12 lut 2018
- *      Author: bartosz
- *     	Ampera TWO
+ *      Author: Bartosz Pracz
+ *     	blink-1 DRIVER
 
  *      v0.2 - working, first test
  *      v0.3- beta amperometer also in back
