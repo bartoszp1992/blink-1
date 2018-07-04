@@ -2,8 +2,8 @@
  * main.c
  *
  *  Created on: 12 lut 2018
- *      Author: Bartosz Pracz
- *     	blink-1 DRIVER
+ *      Author: bartosz
+ *     	Ampera TWO
 
  *      v0.2 - working, first test
  *      v0.3- beta amperometer also in back
@@ -12,6 +12,7 @@
  *     	v0.6- better security
  *     	v0.7- throttle steps as array
  *     	v0.8- upgrade to 1.5kW :)
+ *     	v0.9-fixed amperometer
  *
  */
 
@@ -94,7 +95,8 @@ void ampCheck() {
 	while (ADCSRA & (1 << ADSC))
 		;
 
-	amperage = ((ADC* 100)/137)/10 -37 ;
+	//amperage = ((ADC* 100)/137)/10 -37 ;
+	amperage = ADC /14 - 37;
 }
 
 void power(int power) {
