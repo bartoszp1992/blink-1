@@ -96,7 +96,7 @@ void ampCheck() {
 		;
 
 	//amperage = ((ADC* 100)/137)/10 -37 ;
-	amperage = ADC /14 - 37;
+	amperage = ADC /14 - 36;
 }
 
 void power(int power) {
