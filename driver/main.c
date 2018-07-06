@@ -3,7 +3,7 @@
  *
  *  Created on: 12 lut 2018
  *      Author: bartosz
- *     	Ampera TWO
+ *     	blink-1 driver
 
  *      v0.2 - working, first test
  *      v0.3- beta amperometer also in back
@@ -13,6 +13,7 @@
  *     	v0.7- throttle steps as array
  *     	v0.8- upgrade to 1.5kW :)
  *     	v0.9-fixed amperometer
+ *     	v1.0
  *
  */
 
@@ -49,7 +50,7 @@ volatile float minVoltage = 39;
 
 //amperages
 volatile int amperage = 0;
-int maxAmperage = 28 ;
+int maxAmperage = 18 ;
 
 //lcd
 int modeDisplay = 0;
@@ -94,9 +95,9 @@ void ampCheck() {
 	ADCSRA |= (1 << ADSC); //start
 	while (ADCSRA & (1 << ADSC))
 		;
-
-	//amperage = ((ADC* 100)/137)/10 -37 ;
-	amperage = ADC /14 - 36;
+	//amperage = ADC / 7 - 73; //for 2xACS712-30A
+	//amperage = ADC /14 - 36; //for ACS712-30A
+	amperage = ADC / 20 - 25; //for ACS712-20A
 }
 
 void power(int power) {
