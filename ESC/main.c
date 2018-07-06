@@ -2,14 +2,15 @@
  * main.c
  *
  *  Created on: 12 lut 2018
- *      Author: Bartosz Pracz
- *     	blink-1 ESC
+ *      Author: bartosz
+ *     blink-1 ESC
  *
  *      v0.3 - correct throttle scale
  *      v0.4 - only high side on PWM
  *      v0.5 - beta faster sample rate
  *      v0.7 - kers support
  *      v0.8 - better measurement
+ *      v0.9 - experimental- very fast PWM
  *
  */
 
@@ -107,7 +108,7 @@ volatile int sensor1;
 volatile int sensor2;
 volatile int sensor3;
 
-int duty[] = { 0, 30, 60, 90, 120, 140, 160, 180, 200, 210, 220, 235, 245, 250,
+int duty[] = { 0, 15, 30, 45, 60, 75, 90, 115, 130, 145, 160, 190, 220, 245,
 		255 };
 
 void measurement() {
@@ -282,7 +283,7 @@ void power(void) {
 int main(void) {
 
 	//debug
-	DDRB |= (1<<PB4);
+	DDRB |= (1 << PB4);
 	//speedometer
 	DDRB |= (1 << PB6);
 
@@ -315,7 +316,7 @@ int main(void) {
 	DDRC |= (1 << PC5);
 
 	//ADC define
-	ADMUX |= (1<<REFS0);
+	ADMUX |= (1 << REFS0);
 	//prescaler
 	//ADCSRA |= (1 << ADPS1);//125kHz
 	//ADCSRA |= (1 << ADPS2);
@@ -362,21 +363,28 @@ int main(void) {
 
 		if ((sensor1 == 1) && (sensor2 == 0) && (sensor3 == 1)) {
 			PORTB |= (1 << PB6); ///speedo pulse
-			PORTB |= (1<<PB4);
+			PORTB |= (1 << PB4);
 		} else {
 			PORTB &= ~(1 << PB6);
-			PORTB &= ~(1<<PB4);
+			PORTB &= ~(1 << PB4);
 		}
 
 		if (enable == 1 && kers == 0) {
 
+			/*TCCR0B |= (1 << CS00);	//prescalers to 400Hz
+			 TCCR0B |= (1 << CS01);
+			 TCCR1B |= (1 << CS10);
+			 TCCR1B |= (1 << CS11);
+			 TCCR2B &= ~(1 << CS20);
+			 TCCR2B |= (1 << CS22);
+			 TCCR2B &= ~(1 << CS21);*/
 
-
-			TCCR0B |= (1 << CS00);	//prescalers to 400Hz
-			TCCR0B |= (1 << CS01);
+			TCCR0B |= (1 << CS00);	//prescalers to 30Khz
+			TCCR0B &= ~(1 << CS01);
 			TCCR1B |= (1 << CS10);
-			TCCR1B |= (1 << CS11);
-			TCCR2B |= (1 << CS22);
+			TCCR1B &= ~(1 << CS11);
+			TCCR2B |= (1 << CS20);
+			TCCR2B &= ~(1 << CS22);
 			TCCR2B &= ~(1 << CS21);
 
 			if ((sensor1 == 1) && (sensor2 == 0) && (sensor3 == 1)) {
@@ -410,12 +418,11 @@ int main(void) {
 			}
 		} else if (enable == 0 && kers == 1) {
 
-
-
-			TCCR0B &= ~(1 << CS00);	//prescalers to 400Hz
+			TCCR0B &= ~(1 << CS00);	//prescalers to 4kHz
 			TCCR0B |= (1 << CS01);
 			TCCR1B &= ~(1 << CS10);
 			TCCR1B |= (1 << CS11);
+			TCCR2B &= ~(1 << CS20);
 			TCCR2B &= ~(1 << CS22);
 			TCCR2B |= (1 << CS21);
 
