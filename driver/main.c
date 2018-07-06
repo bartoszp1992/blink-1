@@ -14,6 +14,7 @@
  *     	v0.8- upgrade to 1.5kW :)
  *     	v0.9-fixed amperometer
  *     	v1.0
+ *     	v1.1- more amp measurement options
  *
  */
 
@@ -97,7 +98,8 @@ void ampCheck() {
 		;
 	//amperage = ADC / 7 - 73; //for 2xACS712-30A
 	//amperage = ADC /14 - 36; //for ACS712-30A
-	amperage = ADC / 20 - 25; //for ACS712-20A
+	//amperage = ADC / 20 - 25; //for ACS712-20A
+	amperage =( ADC /14 - 36) * 5; //for ACS712-30A with divider
 }
 
 void power(int power) {
