@@ -16,6 +16,7 @@
  *     	v1.0
  *     	v1.1- more amp measurement options
  *     	v1.2.1- fixed for ACS712 with current divider, display refresh, faster speedo
+ *     	v1.3 - 2kW
  *
  */
 
@@ -53,7 +54,7 @@ volatile float minVoltage = 39;
 
 //amperages
 volatile int amperage = 0;
-int maxAmperage = 50;
+int maxAmperage = 40;
 
 //lcd
 int modeDisplay = 0;
@@ -528,7 +529,6 @@ int main(void) {
 		if ((counter % 150) == 0) {
 			dVolts();
 			dAmpers();
-			dSpeed();
 		}
 
 		if ((counter % 20) == 0) {
