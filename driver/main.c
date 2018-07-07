@@ -15,6 +15,7 @@
  *     	v0.9-fixed amperometer
  *     	v1.0
  *     	v1.1- more amp measurement options
+ *     	v1.2.1- fixed for ACS712 with current divider, display refresh, faster speedo
  *
  */
 
@@ -38,7 +39,8 @@
 //main
 volatile int throttle = 0;
 volatile int duty = 0;
-volatile int throStep[] = {210, 250, 300, 350, 400, 450, 500, 550, 600, 650, 675, 690, 720, 750};
+volatile int throStep[] = { 210, 250, 300, 350, 400, 450, 500, 550, 600, 650,
+		675, 690, 720, 750 };
 
 //modes
 int mode = 3;
@@ -51,7 +53,7 @@ volatile float minVoltage = 39;
 
 //amperages
 volatile int amperage = 0;
-int maxAmperage = 18 ;
+int maxAmperage = 50;
 
 //lcd
 int modeDisplay = 0;
@@ -99,7 +101,105 @@ void ampCheck() {
 	//amperage = ADC / 7 - 73; //for 2xACS712-30A
 	//amperage = ADC /14 - 36; //for ACS712-30A
 	//amperage = ADC / 20 - 25; //for ACS712-20A
-	amperage =( ADC /14 - 36) * 5; //for ACS712-30A with divider
+	//amperage =( ADC /14 - 36) * 5; //for ACS712-30A with divider
+	amperage = ADC / 4 - 128; //for ACS712-20A with divider
+}
+
+void lcdSplash() {
+	lcd_init();
+
+	//right
+	lcd_command(_BV(LCD_CGRAM) + 0 * 8);
+	lcd_putc(0b00000);
+	lcd_putc(0b10000);
+	lcd_putc(0b11100);
+	lcd_putc(0b11111);
+	lcd_putc(0b11100);
+	lcd_putc(0b10000);
+	lcd_putc(0b00000);
+	lcd_putc(0b00000);
+	lcd_goto(0);
+
+	//left
+	lcd_command(_BV(LCD_CGRAM) + 1 * 8);
+	lcd_putc(0b00000);
+	lcd_putc(0b00001);
+	lcd_putc(0b00111);
+	lcd_putc(0b11111);
+	lcd_putc(0b00111);
+	lcd_putc(0b00001);
+	lcd_putc(0b00000);
+	lcd_putc(0b00000);
+	lcd_goto(0);
+
+	//sep
+	lcd_command(_BV(LCD_CGRAM) + 2 * 8);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_goto(0);
+
+	lcd_clrscr();
+	lcd_puts("Bart's");
+	lcd_goto(64);
+	lcd_puts("blink-1");
+	_delay_ms(1000);
+	lcd_clrscr();
+	lcd_goto(66);
+	lcd_putc(2);
+	lcd_goto(68);
+	lcd_puts("D");
+}
+
+void lcdRef() {
+	lcd_init();
+
+	//right
+	lcd_command(_BV(LCD_CGRAM) + 0 * 8);
+	lcd_putc(0b00000);
+	lcd_putc(0b10000);
+	lcd_putc(0b11100);
+	lcd_putc(0b11111);
+	lcd_putc(0b11100);
+	lcd_putc(0b10000);
+	lcd_putc(0b00000);
+	lcd_putc(0b00000);
+	lcd_goto(0);
+
+	//left
+	lcd_command(_BV(LCD_CGRAM) + 1 * 8);
+	lcd_putc(0b00000);
+	lcd_putc(0b00001);
+	lcd_putc(0b00111);
+	lcd_putc(0b11111);
+	lcd_putc(0b00111);
+	lcd_putc(0b00001);
+	lcd_putc(0b00000);
+	lcd_putc(0b00000);
+	lcd_goto(0);
+
+	//sep
+	lcd_command(_BV(LCD_CGRAM) + 2 * 8);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_goto(0);
+
+	lcd_clrscr();
+	lcd_goto(66);
+	lcd_putc(2);
+	lcd_goto(68);
+	lcd_puts("D");
 }
 
 void power(int power) {
@@ -366,7 +466,7 @@ int main(void) {
 	PORTB |= (1 << PB4);
 
 //ADC define
-	ADMUX |= (1<<REFS0);
+	ADMUX |= (1 << REFS0);
 	ADCSRA |= (1 << ADPS1); //prescaler
 	ADCSRA |= (1 << ADPS2);
 	ADCSRA |= (1 << ADEN); //ON
@@ -392,54 +492,7 @@ int main(void) {
 	PORTD |= (1 << PD2);
 	PORTB |= (1 << PB6);
 
-	lcd_init();
-
-	//right
-	lcd_command(_BV(LCD_CGRAM) + 0 * 8);
-	lcd_putc(0b00000);
-	lcd_putc(0b10000);
-	lcd_putc(0b11100);
-	lcd_putc(0b11111);
-	lcd_putc(0b11100);
-	lcd_putc(0b10000);
-	lcd_putc(0b00000);
-	lcd_putc(0b00000);
-	lcd_goto(0);
-
-	//left
-	lcd_command(_BV(LCD_CGRAM) + 1 * 8);
-	lcd_putc(0b00000);
-	lcd_putc(0b00001);
-	lcd_putc(0b00111);
-	lcd_putc(0b11111);
-	lcd_putc(0b00111);
-	lcd_putc(0b00001);
-	lcd_putc(0b00000);
-	lcd_putc(0b00000);
-	lcd_goto(0);
-
-	//sep
-	lcd_command(_BV(LCD_CGRAM) + 2 * 8);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_goto(0);
-
-	lcd_clrscr();
-	lcd_puts("Bart's");
-	lcd_goto(64);
-	lcd_puts("blink-1");
-	_delay_ms(1000);
-	lcd_clrscr();
-	lcd_goto(66);
-	lcd_putc(2);
-	lcd_goto(68);
-	lcd_puts("D");
+	lcdSplash();
 
 //speedometer
 
@@ -478,6 +531,14 @@ int main(void) {
 			dSpeed();
 		}
 
+		if ((counter % 20) == 0) {
+			dSpeed();
+		}
+
+		if ((counter % 1000) == 0) {
+					lcdRef();
+				}
+
 		//send signal
 		if (throttle < throStep[0] && kers == 1) {
 			power(0); //when power zero, send 0 enable and 1 kers
@@ -485,33 +546,47 @@ int main(void) {
 			power(1); //wher power one, send 0 enable and 0 kers
 
 		} else {
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[0])
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[0])
 				duty = 2;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[1])
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[1])
 				duty = 3;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[2])
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[2])
 				duty = 4;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[3])
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[3])
 				duty = 5;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[4])
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[4])
 				duty = 6;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[5])
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[5])
 				duty = 7;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[6] && mode > 1) //mid
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[6] && mode > 1) //mid
 				duty = 8;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[7] && mode > 1)
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[7] && mode > 1)
 				duty = 9;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[8] && mode > 1)
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[8] && mode > 1)
 				duty = 10;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[9] && mode > 1)
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[9] && mode > 1)
 				duty = 11;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[10] && mode > 2) //pro
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[10] && mode > 2) //pro
 				duty = 12;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[11] && mode > 2)
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[11] && mode > 2)
 				duty = 13;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[12] && mode > 2)
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[12] && mode > 2)
 				duty = 14;
-			if (amperage < maxAmperage && voltage > minVoltage && throttle >= throStep[13] && mode > 2)
+			if (amperage < maxAmperage && voltage > minVoltage
+					&& throttle >= throStep[13] && mode > 2)
 				duty = 15;
 			power(duty);
 
@@ -538,7 +613,8 @@ ISR(INT1_vect) {
 ISR(TIMER1_COMPA_vect) {
 //CPU Jumps here every 1 sec exactly!
 	speed = count / 3;
-	if(speed > 99) speed = 99;
+	if (speed > 99)
+		speed = 99;
 	count = 0;
 }
 
