@@ -20,6 +20,7 @@
  *     	v1.5 - safeLoop notify, faster speedo, Overload notify
  *     	Milestone 1- All working?
  *     	v2.0 - added menu
+ *     	v2.0.1 - better overload secure
  *
  */
 
@@ -49,11 +50,11 @@ volatile int throttle = 0;
 volatile int duty = 0;
 volatile int throStep[] = { 210, 250, 300, 350, 400, 450, 500, 550, 600, 650,
 		675, 690, 720, 750 };
+int maxDuty = 15;
 
 //modes
 int mode = 3;
 int kers = 0;
-int safeLoop = 0;
 
 //menu
 int menu = 0;
@@ -333,13 +334,8 @@ void dNotify() {
 		lcd_puts("W");
 	}
 
-	if (safeLoop == 1) {
-		lcd_goto(notifyDisplay + 1);
-		lcd_puts("S");
-	}
-
 	if (amperage > maxAmperage) {
-		lcd_goto(notifyDisplay + 2);
+		lcd_goto(notifyDisplay + 1);
 		lcd_puts("O");
 	}
 
@@ -445,21 +441,21 @@ void modes() {
 					kers = 0;
 					lcd_goto(64);
 					lcd_puts(" ");
-					_delay_ms(500);
+					_delay_ms(800);
 				} else if (kers == 0) {
 					kers = 1;
 					lcd_goto(64);
 					lcd_puts("K");
-					_delay_ms(500);
+					_delay_ms(800);
 				}
 			} else {
 
 				if (mode <= 2) {
 					mode++;
-					_delay_ms(500);
+					_delay_ms(800);
 				} else {
 					mode = 1;
-					_delay_ms(500);
+					_delay_ms(800);
 				}
 			}
 
@@ -519,6 +515,7 @@ void modes() {
 						}
 						menu = 0;
 						lcdRef();
+						maxDuty = 15;
 					}
 					while (option == 1) {
 						lcd_goto(64);
@@ -742,7 +739,6 @@ int main(void) {
 	while (1) {
 
 		modes();
-		safeLoop = 0;
 
 		batteryCheck();
 		ampCheck();
@@ -758,7 +754,10 @@ int main(void) {
 
 		if ((counter % 1000) == 0) {
 			lcdRef();
+
 		}
+
+		if((counter % 500)==0) if(maxDuty < 15) maxDuty++; //slow maxDuty reset
 
 		if ((counter % 100) == 0) {
 			dVolts();
@@ -776,7 +775,7 @@ int main(void) {
 			power(1); //wher power one, send 0 enable and 0 kers
 
 		} else {
-			if (amperage < maxAmperage && voltage > minVoltage
+			if (amperage < maxAmperage && voltage > minVoltage//eco
 					&& throttle >= throStep[0])
 				duty = 2;
 			if (amperage < maxAmperage && voltage > minVoltage
@@ -795,7 +794,7 @@ int main(void) {
 					&& throttle >= throStep[5])
 				duty = 7;
 			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[6] && mode > 1) //mid
+					&& throttle >= throStep[6] && mode > 1) //smart
 				duty = 8;
 			if (amperage < maxAmperage && voltage > minVoltage
 					&& throttle >= throStep[7] && mode > 1)
@@ -807,7 +806,7 @@ int main(void) {
 					&& throttle >= throStep[9] && mode > 1)
 				duty = 11;
 			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[10] && mode > 2) //pro
+					&& throttle >= throStep[10] && mode > 2) //sport
 				duty = 12;
 			if (amperage < maxAmperage && voltage > minVoltage
 					&& throttle >= throStep[11] && mode > 2)
@@ -818,14 +817,20 @@ int main(void) {
 			if (amperage < maxAmperage && voltage > minVoltage
 					&& throttle >= throStep[13] && mode > 2)
 				duty = 15;
+
+			if(duty > maxDuty) duty = maxDuty;
+
 			power(duty);
 
 			batteryCheck();
 			ampCheck();
 
-			while (((voltage <= minVoltage) || (amperage > maxAmperage))
-					&& throttle >= 200 && duty > 1) {
-				safeLoop = 1;
+			//overload secure
+			if(amperage > maxAmperage){
+				maxDuty = duty - 1;
+			}
+			//overdischarge secure
+			while (voltage <= minVoltage && throttle >= 200 && duty > 1) {
 				power(duty - 1);
 				batteryCheck();
 				ampCheck();
