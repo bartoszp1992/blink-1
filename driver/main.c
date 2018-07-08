@@ -2,21 +2,24 @@
  * main.c
  *
  *  Created on: 12 lut 2018
- *      Author: bartosz
+ *      Author: Bartosz Pracz
  *     	blink-1 driver
 
  *      v0.2 - working, first test
- *      v0.3- beta amperometer also in back
+ *      v0.3- beta amperometer
  *      v0.4- custom characters, notify
  *      v0.5- kers support
  *     	v0.6- better security
  *     	v0.7- throttle steps as array
  *     	v0.8- upgrade to 1.5kW :)
  *     	v0.9-fixed amperometer
- *     	v1.0
  *     	v1.1- more amp measurement options
  *     	v1.2.1- fixed for ACS712 with current divider, display refresh, faster speedo
- *     	v1.3 - 2kW
+ *     	v1.3 - 2kW :)
+ *     	v1.4 - fixed overdraining battery, faster screen refresh
+ *     	v1.5 - safeLoop notify, faster speedo, Overload notify
+ *     	Milestone 1- All working?
+ *     	v2.0 - added menu
  *
  */
 
@@ -25,6 +28,10 @@
 #include <util/delay.h>
 #include "hd44780.h"
 #include <avr/interrupt.h>
+
+EEMEM unsigned int s; // speedo
+EEMEM unsigned int a; // amperage
+EEMEM unsigned int v; // voltage
 
 #define one PORTD |= (1<<PD0)
 #define two PORTD |= (1<<PD1)
@@ -46,15 +53,26 @@ volatile int throStep[] = { 210, 250, 300, 350, 400, 450, 500, 550, 600, 650,
 //modes
 int mode = 3;
 int kers = 0;
+int safeLoop = 0;
+
+//menu
+int menu = 0;
+int option = 0;
+int speedoCal;
+int ampCal;
+int voltCal;
+float minVoltageDef = 39;
+int maxAmperageDef = 40;
+int speedoDef = 15;
 
 //voltages
 volatile float voltage;
 volatile float difference;
-volatile float minVoltage = 39;
+int minVoltage;
 
 //amperages
 volatile int amperage = 0;
-int maxAmperage = 40;
+int maxAmperage;
 
 //lcd
 int modeDisplay = 0;
@@ -68,9 +86,9 @@ char buffer[10];
 int counter = 1;
 
 //speedometer
-volatile unsigned int count = 0;
-volatile unsigned int rps;
-volatile unsigned int speed;
+volatile int count = 0;
+volatile int speed;
+int speedo;
 
 int itoa();
 int sprintf(char *str, const char *format, ...);
@@ -304,15 +322,27 @@ void power(int power) {
 }
 
 void dNotify() {
-	if (voltage < 42) {
-		lcd_goto(notifyDisplay);
-		lcd_puts("weak");
-	}
 
 	if ((counter % 500) == 0) {
 		lcd_goto(notifyDisplay);
 		lcd_puts("    ");
 	}
+
+	if (voltage < minVoltage + 2) {
+		lcd_goto(notifyDisplay);
+		lcd_puts("W");
+	}
+
+	if (safeLoop == 1) {
+		lcd_goto(notifyDisplay + 1);
+		lcd_puts("S");
+	}
+
+	if (amperage > maxAmperage) {
+		lcd_goto(notifyDisplay + 2);
+		lcd_puts("O");
+	}
+
 }
 
 void dAmpers() {
@@ -404,28 +434,215 @@ void dSpeed() {
 void modes() {
 //mode select
 	if (!(PINB & (1 << PB4))) {
+
 		_delay_ms(800);
+		throttleCheck();
 
-		if (!(PINB & (1 << PB4))) {
-			if (kers == 1) {
-				kers = 0;
-				lcd_goto(64);
-				lcd_puts(" ");
-				_delay_ms(500);
-			} else if (kers == 0) {
-				kers = 1;
-				lcd_goto(64);
-				lcd_puts("K");
-				_delay_ms(500);
-			}
-		} else {
+		if (throttle <= throStep[0]) {
 
-			if (mode <= 2) {
-				mode++;
-				_delay_ms(500);
+			if (!(PINB & (1 << PB4))) {
+				if (kers == 1) {
+					kers = 0;
+					lcd_goto(64);
+					lcd_puts(" ");
+					_delay_ms(500);
+				} else if (kers == 0) {
+					kers = 1;
+					lcd_goto(64);
+					lcd_puts("K");
+					_delay_ms(500);
+				}
 			} else {
-				mode = 1;
-				_delay_ms(500);
+
+				if (mode <= 2) {
+					mode++;
+					_delay_ms(500);
+				} else {
+					mode = 1;
+					_delay_ms(500);
+				}
+			}
+
+		}
+
+		else {
+			menu = 1;
+			lcd_clrscr();
+			lcd_goto(0);
+			lcd_puts("blink-1. menu:");
+			_delay_ms(800);
+
+			while (menu == 1) {
+
+				power(1);
+				throttleCheck();
+				if (throttle < throStep[1]) {
+					lcd_goto(64);
+					lcd_puts("speedo calibrate");
+					option = 1;
+				}
+				if (throttle >= throStep[1] && throttle < throStep[4]) {
+					lcd_goto(64);
+					lcd_puts("max amperage    ");
+					option = 2;
+				}
+
+				if (throttle >= throStep[4] && throttle < throStep[7]) {
+					lcd_goto(64);
+					lcd_puts("minimal voltage  ");
+					option = 3;
+				}
+				if (throttle >= throStep[7] && throttle < throStep[10]) {
+					lcd_goto(64);
+					lcd_puts("check values     ");
+					option = 4;
+				}
+				if (throttle >= throStep[10] && throttle < throStep[13]) {
+					lcd_goto(64);
+					lcd_puts("reset defaults   ");
+					option = 5;
+				}
+				if (throttle >= throStep[13]) {
+					lcd_goto(64);
+					lcd_puts("exit             ");
+					option = 6;
+				}
+				if (!(PINB & (1 << PB4))) {
+
+					_delay_ms(800);
+					if (option == 6) {
+						throttleCheck();
+						while (throttle > throStep[0]) {
+							lcd_goto(64);
+							lcd_puts("release throttle");
+							throttleCheck();
+						}
+						menu = 0;
+						lcdRef();
+					}
+					while (option == 1) {
+						lcd_goto(64);
+						lcd_puts("speedo Cal:   ");
+						lcd_goto(78);
+						itoa(speedoCal, buffer, 10);
+						lcd_puts(buffer);
+						throttleCheck();
+						speedoCal = throttle / 40;
+						if (speedoCal < 10)
+							speedoCal = 10;
+						if (!(PINB & (1 << PB4))) {
+							speedo = speedoCal;
+							lcd_goto(64);
+							lcd_puts("set: ");
+							itoa(speedo, buffer, 10);
+							lcd_puts(buffer);
+							lcd_puts("         ");
+							_delay_ms(800);
+							option = 0;
+							eeprom_write_byte(&s, speedo);
+							_delay_ms(20);
+
+						}
+					}
+					while (option == 2) {
+						lcd_goto(64);
+						lcd_puts("max Amp:      ");
+						lcd_goto(78);
+						itoa(ampCal, buffer, 10);
+						lcd_puts(buffer);
+						if (ampCal <= 9)
+							lcd_puts(" ");
+						throttleCheck();
+						ampCal = (throttle / 7) - 22;
+						if (ampCal > 99)
+							ampCal = 99;
+						if (!(PINB & (1 << PB4))) {
+							maxAmperage = ampCal;
+							lcd_goto(64);
+							lcd_puts("set: ");
+							itoa(maxAmperage, buffer, 10);
+							lcd_puts(buffer);
+							lcd_puts("         ");
+							_delay_ms(800);
+							option = 0;
+							eeprom_write_byte(&a, maxAmperage);
+							_delay_ms(20);
+
+						}
+					}
+
+					while (option == 3) {
+						lcd_goto(64);
+						lcd_puts("min Volt:     ");
+						lcd_goto(78);
+						itoa(voltCal, buffer, 10);
+						lcd_puts(buffer);
+						throttleCheck();
+						if (throttle < throStep[0])
+							voltCal = 30;
+						if (throttle >= throStep[1] && throttle < throStep[4])
+							voltCal = 39;
+						if (throttle >= throStep[4] && throttle < throStep[8])
+							voltCal = 60;
+						if (!(PINB & (1 << PB4))) {
+							minVoltage = voltCal;
+							lcd_goto(64);
+							lcd_puts("set: ");
+							itoa(minVoltage, buffer, 10);
+							lcd_puts(buffer);
+							lcd_puts("         ");
+							_delay_ms(800);
+							option = 0;
+							eeprom_write_byte(&v, minVoltage);
+							_delay_ms(20);
+
+						}
+					}
+
+					while (option == 4) {
+						lcd_goto(64);
+						lcd_puts("speedo:       ");
+						lcd_goto(78);
+						itoa(speedo, buffer, 10);
+						lcd_puts(buffer);
+						_delay_ms(800);
+
+						lcd_goto(64);
+						lcd_puts("Max amperage: ");
+						lcd_goto(78);
+						itoa(maxAmperage, buffer, 10);
+						lcd_puts(buffer);
+						lcd_puts("    ");
+						_delay_ms(800);
+
+						lcd_goto(64);
+						lcd_puts("min Voltage:  ");
+						lcd_goto(78);
+						itoa(minVoltage, buffer, 10);
+						lcd_puts(buffer);
+						_delay_ms(800);
+						option = 0;
+
+					}
+
+					while (option == 5) {
+						lcd_goto(64);
+						lcd_puts("restoring...    ");
+						speedo = speedoDef;
+						maxAmperage = maxAmperageDef;
+						minVoltage = minVoltageDef;
+						eeprom_write_byte(&s, speedo);
+						_delay_ms(20);
+						eeprom_write_byte(&a, maxAmperage);
+						_delay_ms(20);
+						eeprom_write_byte(&v, minVoltage);
+						_delay_ms(20);
+						_delay_ms(800);
+						option = 0;
+
+					}
+
+				}
 			}
 		}
 	}
@@ -506,13 +723,26 @@ int main(void) {
 	TIMSK1 |= (1 << OCIE1A);
 	sei();
 
-	OCR1A = 7812;
+	//OCR1A = 7812;
+	OCR1A = 3906;
 	DDRD &= ~(1 << PD3);
 	PORTD |= (1 << PD3);
+
+	//read eeprom
+	minVoltage = eeprom_read_byte(&v);
+	if (minVoltage > 60)
+		minVoltage = minVoltageDef;
+	maxAmperage = eeprom_read_byte(&a);
+	if (maxAmperage > 99)
+		maxAmperage = maxAmperageDef;
+	speedo = eeprom_read_byte(&s);
+	if (speedo > 50)
+		speedo = speedoDef;
 
 	while (1) {
 
 		modes();
+		safeLoop = 0;
 
 		batteryCheck();
 		ampCheck();
@@ -526,18 +756,18 @@ int main(void) {
 		if (counter > 32000)
 			counter = 1;
 
-		if ((counter % 150) == 0) {
+		if ((counter % 1000) == 0) {
+			lcdRef();
+		}
+
+		if ((counter % 100) == 0) {
 			dVolts();
 			dAmpers();
 		}
 
-		if ((counter % 20) == 0) {
+		if ((counter % 50) == 0) {
 			dSpeed();
 		}
-
-		if ((counter % 1000) == 0) {
-					lcdRef();
-				}
 
 		//send signal
 		if (throttle < throStep[0] && kers == 1) {
@@ -594,7 +824,8 @@ int main(void) {
 			ampCheck();
 
 			while (((voltage <= minVoltage) || (amperage > maxAmperage))
-					&& throttle >= 200) {
+					&& throttle >= 200 && duty > 1) {
+				safeLoop = 1;
 				power(duty - 1);
 				batteryCheck();
 				ampCheck();
@@ -612,7 +843,7 @@ ISR(INT1_vect) {
 
 ISR(TIMER1_COMPA_vect) {
 //CPU Jumps here every 1 sec exactly!
-	speed = count / 3;
+	speed = (count * 10) / speedo;
 	if (speed > 99)
 		speed = 99;
 	count = 0;
