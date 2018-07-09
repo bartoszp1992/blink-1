@@ -21,6 +21,7 @@
  *     	Milestone 1- All working?
  *     	v2.0 - added menu
  *     	v2.0.1 - better overload secure
+ *     	v2.1 - speed limit, optimalization.
  *
  */
 
@@ -33,6 +34,8 @@
 EEMEM unsigned int s; // speedo
 EEMEM unsigned int a; // amperage
 EEMEM unsigned int v; // voltage
+EEMEM unsigned int l; // speed limit
+EEMEM unsigned int m; // mode
 
 #define one PORTD |= (1<<PD0)
 #define two PORTD |= (1<<PD1)
@@ -53,8 +56,10 @@ volatile int throStep[] = { 210, 250, 300, 350, 400, 450, 500, 550, 600, 650,
 int maxDuty = 15;
 
 //modes
-int mode = 3;
+int mode;
 int kers = 0;
+int ecoLimit = 9;
+int smartLimit = 12;
 
 //menu
 int menu = 0;
@@ -62,9 +67,12 @@ int option = 0;
 int speedoCal;
 int ampCal;
 int voltCal;
+int speedLimitCal;
 float minVoltageDef = 39;
 int maxAmperageDef = 40;
 int speedoDef = 15;
+int speedLimitDef = 99;
+int modeDef = 3;
 
 //voltages
 volatile float voltage;
@@ -90,6 +98,7 @@ int counter = 1;
 volatile int count = 0;
 volatile int speed;
 int speedo;
+int speedLimit;
 
 int itoa();
 int sprintf(char *str, const char *format, ...);
@@ -127,53 +136,11 @@ void ampCheck() {
 
 void lcdSplash() {
 	lcd_init();
-
-	//right
-	lcd_command(_BV(LCD_CGRAM) + 0 * 8);
-	lcd_putc(0b00000);
-	lcd_putc(0b10000);
-	lcd_putc(0b11100);
-	lcd_putc(0b11111);
-	lcd_putc(0b11100);
-	lcd_putc(0b10000);
-	lcd_putc(0b00000);
-	lcd_putc(0b00000);
-	lcd_goto(0);
-
-	//left
-	lcd_command(_BV(LCD_CGRAM) + 1 * 8);
-	lcd_putc(0b00000);
-	lcd_putc(0b00001);
-	lcd_putc(0b00111);
-	lcd_putc(0b11111);
-	lcd_putc(0b00111);
-	lcd_putc(0b00001);
-	lcd_putc(0b00000);
-	lcd_putc(0b00000);
-	lcd_goto(0);
-
-	//sep
-	lcd_command(_BV(LCD_CGRAM) + 2 * 8);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_putc(0b01110);
-	lcd_goto(0);
-
 	lcd_clrscr();
 	lcd_puts("Bart's");
 	lcd_goto(64);
 	lcd_puts("blink-1");
 	_delay_ms(1000);
-	lcd_clrscr();
-	lcd_goto(66);
-	lcd_putc(2);
-	lcd_goto(68);
-	lcd_puts("D");
 }
 
 void lcdRef() {
@@ -457,6 +424,8 @@ void modes() {
 					mode = 1;
 					_delay_ms(800);
 				}
+				eeprom_write_byte(&m, mode);
+				_delay_ms(20);
 			}
 
 		}
@@ -477,36 +446,42 @@ void modes() {
 					lcd_puts("speedo calibrate");
 					option = 1;
 				}
-				if (throttle >= throStep[1] && throttle < throStep[4]) {
+				if (throttle >= throStep[1] && throttle < throStep[3]) {
 					lcd_goto(64);
 					lcd_puts("max amperage    ");
 					option = 2;
 				}
 
-				if (throttle >= throStep[4] && throttle < throStep[7]) {
+				if (throttle >= throStep[3] && throttle < throStep[5]) {
 					lcd_goto(64);
 					lcd_puts("minimal voltage  ");
 					option = 3;
 				}
-				if (throttle >= throStep[7] && throttle < throStep[10]) {
+				if (throttle >= throStep[5] && throttle < throStep[7]) {
+					lcd_goto(64);
+					lcd_puts("speed limit      ");
+					option = 4;
+
+				}
+				if (throttle >= throStep[7] && throttle < throStep[9]) {
 					lcd_goto(64);
 					lcd_puts("check values     ");
-					option = 4;
-				}
-				if (throttle >= throStep[10] && throttle < throStep[13]) {
-					lcd_goto(64);
-					lcd_puts("reset defaults   ");
 					option = 5;
 				}
-				if (throttle >= throStep[13]) {
+				if (throttle >= throStep[9] && throttle < throStep[11]) {
+					lcd_goto(64);
+					lcd_puts("reset defaults   ");
+					option = 6;
+				}
+				if (throttle >= throStep[11]) {
 					lcd_goto(64);
 					lcd_puts("exit             ");
-					option = 6;
+					option = 7;
 				}
 				if (!(PINB & (1 << PB4))) {
 
 					_delay_ms(800);
-					if (option == 6) {
+					if (option == 7) {
 						throttleCheck();
 						while (throttle > throStep[0]) {
 							lcd_goto(64);
@@ -596,7 +571,7 @@ void modes() {
 						}
 					}
 
-					while (option == 4) {
+					while (option == 5) {
 						lcd_goto(64);
 						lcd_puts("speedo:       ");
 						lcd_goto(78);
@@ -620,23 +595,61 @@ void modes() {
 						_delay_ms(800);
 						option = 0;
 
+						lcd_goto(64);
+						lcd_puts("speed limit:  ");
+						lcd_goto(78);
+						itoa(speedLimit, buffer, 10);
+						lcd_puts(buffer);
+						_delay_ms(800);
+						option = 0;
+
 					}
 
-					while (option == 5) {
+					while (option == 6) {
 						lcd_goto(64);
 						lcd_puts("restoring...    ");
 						speedo = speedoDef;
 						maxAmperage = maxAmperageDef;
 						minVoltage = minVoltageDef;
+						speedLimit = speedLimitDef;
 						eeprom_write_byte(&s, speedo);
 						_delay_ms(20);
 						eeprom_write_byte(&a, maxAmperage);
 						_delay_ms(20);
 						eeprom_write_byte(&v, minVoltage);
 						_delay_ms(20);
+						eeprom_write_byte(&l, speedLimit);
+						_delay_ms(20);
 						_delay_ms(800);
 						option = 0;
 
+					}
+
+					while (option == 4) {
+						lcd_goto(64);
+						lcd_puts("Speed Limit:  ");
+						lcd_goto(78);
+						itoa(speedLimitCal, buffer, 10);
+						lcd_puts(buffer);
+						if (speedLimitCal <= 9)
+							lcd_puts(" ");
+						throttleCheck();
+						speedLimitCal = (throttle / 7) - 22;
+						if (speedLimitCal > 99)
+							speedLimitCal = 99;
+						if (!(PINB & (1 << PB4))) {
+							speedLimit = speedLimitCal;
+							lcd_goto(64);
+							lcd_puts("set: ");
+							itoa(speedLimit, buffer, 10);
+							lcd_puts(buffer);
+							lcd_puts("         ");
+							_delay_ms(800);
+							option = 0;
+							eeprom_write_byte(&l, speedLimit);
+							_delay_ms(20);
+
+						}
 					}
 
 				}
@@ -708,6 +721,7 @@ int main(void) {
 	PORTB |= (1 << PB6);
 
 	lcdSplash();
+	lcdRef();
 
 //speedometer
 
@@ -735,6 +749,12 @@ int main(void) {
 	speedo = eeprom_read_byte(&s);
 	if (speedo > 50)
 		speedo = speedoDef;
+	speedLimit = eeprom_read_byte(&l);
+			if (speedLimit > 99)
+				speedLimit = speedLimitDef;
+	mode = eeprom_read_byte(&m);
+		if (mode > 3)
+			mode = modeDef;
 
 	while (1) {
 
@@ -748,16 +768,19 @@ int main(void) {
 		dKers();
 		dNotify();
 
+		//Non Continous operations
+
 		counter++;
 		if (counter > 32000)
 			counter = 1;
 
 		if ((counter % 1000) == 0) {
 			lcdRef();
-
 		}
 
-		if((counter % 500)==0) if(maxDuty < 15) maxDuty++; //slow maxDuty reset
+		if ((counter % 50) == 0)
+			if (maxDuty < 15)
+				maxDuty++; //slow maxDuty reset
 
 		if ((counter % 100) == 0) {
 			dVolts();
@@ -768,6 +791,8 @@ int main(void) {
 			dSpeed();
 		}
 
+		//end of non continous operation
+
 		//send signal
 		if (throttle < throStep[0] && kers == 1) {
 			power(0); //when power zero, send 0 enable and 1 kers
@@ -775,66 +800,48 @@ int main(void) {
 			power(1); //wher power one, send 0 enable and 0 kers
 
 		} else {
-			if (amperage < maxAmperage && voltage > minVoltage//eco
-					&& throttle >= throStep[0])
+			if (throttle >= throStep[0])
 				duty = 2;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[1])
+			if (throttle >= throStep[1])
 				duty = 3;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[2])
+			if (throttle >= throStep[2])
 				duty = 4;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[3])
+			if (throttle >= throStep[3])
 				duty = 5;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[4])
+			if (throttle >= throStep[4])
 				duty = 6;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[5])
+			if (throttle >= throStep[5])
 				duty = 7;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[6] && mode > 1) //smart
+			if (throttle >= throStep[6])
 				duty = 8;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[7] && mode > 1)
+			if (throttle >= throStep[7])
 				duty = 9;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[8] && mode > 1)
+			if (throttle >= throStep[8])
 				duty = 10;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[9] && mode > 1)
+			if (throttle >= throStep[9])
 				duty = 11;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[10] && mode > 2) //sport
+			if (throttle >= throStep[10])
 				duty = 12;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[11] && mode > 2)
+			if (throttle >= throStep[11])
 				duty = 13;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[12] && mode > 2)
+			if (throttle >= throStep[12])
 				duty = 14;
-			if (amperage < maxAmperage && voltage > minVoltage
-					&& throttle >= throStep[13] && mode > 2)
+			if (throttle >= throStep[13])
 				duty = 15;
 
-			if(duty > maxDuty) duty = maxDuty;
+			if (mode == 1 && duty > 9) //eco mode
+				duty = 9;
+			if (mode == 2 && duty > 12) //smart mode
+				duty = 12;
 
-			power(duty);
+			if (duty > maxDuty)
+				duty = maxDuty;
 
-			batteryCheck();
-			ampCheck();
+			power(duty); //send power pattern
 
-			//overload secure
-			if(amperage > maxAmperage){
+			//overload secure, over discharge secure, speedLimit secure
+			if (amperage > maxAmperage || voltage < minVoltage || speed > speedLimit) {
 				maxDuty = duty - 1;
-			}
-			//overdischarge secure
-			while (voltage <= minVoltage && throttle >= 200 && duty > 1) {
-				power(duty - 1);
-				batteryCheck();
-				ampCheck();
-				throttleCheck();
 			}
 
 		}
