@@ -22,6 +22,11 @@
  *     	v2.0 - added menu
  *     	v2.0.1 - better overload secure
  *     	v2.1 - speed limit, optimalization.
+ *     	v2.2 -speed limit fix
+ *     	v2.3 - speed limit fix x2?
+ *     	2.4 speedo limit again, better amp count.
+ *     	2.5 delta upgrade
+ *     	2.6 temp sensor
  *
  */
 
@@ -83,6 +88,10 @@ int minVoltage;
 volatile int amperage = 0;
 int maxAmperage;
 
+//temp
+int temp;
+int maxTemp = 60;
+
 //lcd
 int modeDisplay = 0;
 int voltageDisplay = 11;
@@ -99,11 +108,23 @@ volatile int count = 0;
 volatile int speed;
 int speedo;
 int speedLimit;
+int speedWait;
 
 int itoa();
 int sprintf(char *str, const char *format, ...);
 
+void tempCheck(void) {
+	ADMUX |= (1 << MUX2);
+	ADMUX &= ~(1 << MUX1);		//ADC5(temp)
+	ADMUX |= (1 << MUX0);
+	ADCSRA |= (1 << ADSC); //start
+	while (ADCSRA & (1 << ADSC))
+		;
+	temp = ((ADC * 5) / 1024) * 100;
+}
+
 void batteryCheck(void) {
+	ADMUX &= ~(1 << MUX2);
 	ADMUX |= (1 << MUX1);		//ADC3(battery)
 	ADMUX |= (1 << MUX0);
 	ADCSRA |= (1 << ADSC); //start
@@ -113,6 +134,7 @@ void batteryCheck(void) {
 }
 
 void throttleCheck() {
+	ADMUX &= ~(1 << MUX2);
 	ADMUX |= (1 << MUX1);		//ADC2(throttle)
 	ADMUX &= ~(1 << MUX0);
 	ADCSRA |= (1 << ADSC); //start
@@ -122,6 +144,7 @@ void throttleCheck() {
 }
 
 void ampCheck() {
+	ADMUX &= ~(1 << MUX2);
 	ADMUX &= ~(1 << MUX1);		//ADC0(amp) 205/V, 925/4,5V
 	ADMUX &= ~(1 << MUX0);
 	ADCSRA |= (1 << ADSC); //start
@@ -131,7 +154,7 @@ void ampCheck() {
 	//amperage = ADC /14 - 36; //for ACS712-30A
 	//amperage = ADC / 20 - 25; //for ACS712-20A
 	//amperage =( ADC /14 - 36) * 5; //for ACS712-30A with divider
-	amperage = ADC / 4 - 128; //for ACS712-20A with divider
+	amperage = ADC / 4 - 127; //for ACS712-20A with divider
 }
 
 void lcdSplash() {
@@ -180,6 +203,42 @@ void lcdRef() {
 	lcd_putc(0b01110);
 	lcd_putc(0b01110);
 	lcd_putc(0b01110);
+	lcd_goto(0);
+
+	//weak
+	lcd_command(_BV(LCD_CGRAM) + 3 * 8);
+	lcd_putc(0b01110);
+	lcd_putc(0b11011);
+	lcd_putc(0b10001);
+	lcd_putc(0b10001);
+	lcd_putc(0b10001);
+	lcd_putc(0b11111);
+	lcd_putc(0b11111);
+	lcd_putc(0b00000);
+	lcd_goto(0);
+
+	//temp
+	lcd_command(_BV(LCD_CGRAM) + 4 * 8);
+	lcd_putc(0b00100);
+	lcd_putc(0b01100);
+	lcd_putc(0b00100);
+	lcd_putc(0b01100);
+	lcd_putc(0b00100);
+	lcd_putc(0b01110);
+	lcd_putc(0b01110);
+	lcd_putc(0b00000);
+	lcd_goto(0);
+
+	//over
+	lcd_command(_BV(LCD_CGRAM) + 5 * 8);
+	lcd_putc(0b00100);
+	lcd_putc(0b00100);
+	lcd_putc(0b00100);
+	lcd_putc(0b00100);
+	lcd_putc(0b10101);
+	lcd_putc(0b01110);
+	lcd_putc(0b00100);
+	lcd_putc(0b00000);
 	lcd_goto(0);
 
 	lcd_clrscr();
@@ -298,12 +357,16 @@ void dNotify() {
 
 	if (voltage < minVoltage + 2) {
 		lcd_goto(notifyDisplay);
-		lcd_puts("W");
+		lcd_putc(3);
 	}
 
 	if (amperage > maxAmperage) {
 		lcd_goto(notifyDisplay + 1);
-		lcd_puts("O");
+		lcd_putc(5);
+	}
+	if (temp > maxTemp) {
+		lcd_goto(notifyDisplay + 2);
+		lcd_putc(4);
 	}
 
 }
@@ -741,7 +804,7 @@ int main(void) {
 
 	//read eeprom
 	minVoltage = eeprom_read_byte(&v);
-	if (minVoltage > 60)
+	if (minVoltage > 60 || minVoltage < 28)
 		minVoltage = minVoltageDef;
 	maxAmperage = eeprom_read_byte(&a);
 	if (maxAmperage > 99)
@@ -750,11 +813,11 @@ int main(void) {
 	if (speedo > 50)
 		speedo = speedoDef;
 	speedLimit = eeprom_read_byte(&l);
-			if (speedLimit > 99)
-				speedLimit = speedLimitDef;
+	if (speedLimit > 99)
+		speedLimit = speedLimitDef;
 	mode = eeprom_read_byte(&m);
-		if (mode > 3)
-			mode = modeDef;
+	if (mode > 3)
+		mode = modeDef;
 
 	while (1) {
 
@@ -763,6 +826,7 @@ int main(void) {
 		batteryCheck();
 		ampCheck();
 		throttleCheck();
+		tempCheck();
 
 		dThrottle();
 		dKers();
@@ -789,6 +853,20 @@ int main(void) {
 
 		if ((counter % 50) == 0) {
 			dSpeed();
+		}
+
+		//speedLimit
+
+		if ((counter % 20) == 0) {
+			if (speed > speedLimit && duty > 1 && speedWait == 0) {
+				maxDuty = duty - 3;
+				speedWait = 1;
+			}
+		}
+
+		//overload secure, over discharge secure
+		if ((amperage > maxAmperage || voltage < minVoltage) && duty > 1) {
+			maxDuty = duty - 1;
 		}
 
 		//end of non continous operation
@@ -829,20 +907,15 @@ int main(void) {
 			if (throttle >= throStep[13])
 				duty = 15;
 
-			if (mode == 1 && duty > 9) //eco mode
-				duty = 9;
-			if (mode == 2 && duty > 12) //smart mode
-				duty = 12;
+			if (mode == 1 && duty > 7) //eco mode
+				duty = 7;
+			if (mode == 2 && duty > 10) //smart mode
+				duty = 10;
 
 			if (duty > maxDuty)
 				duty = maxDuty;
 
 			power(duty); //send power pattern
-
-			//overload secure, over discharge secure, speedLimit secure
-			if (amperage > maxAmperage || voltage < minVoltage || speed > speedLimit) {
-				maxDuty = duty - 1;
-			}
 
 		}
 	}
@@ -859,5 +932,5 @@ ISR(TIMER1_COMPA_vect) {
 	if (speed > 99)
 		speed = 99;
 	count = 0;
+	speedWait = 0;
 }
-
