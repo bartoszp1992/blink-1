@@ -2,7 +2,7 @@
  * main.c
  *
  *  Created on: 12 lut 2018
- *      Author: bartosz
+ *      Author: Bartosz Pracz
  *     blink-1 ESC
  *
  *      v0.3 - correct throttle scale
@@ -11,6 +11,8 @@
  *      v0.7 - kers support
  *      v0.8 - better measurement
  *      v0.9 - experimental- very fast PWM
+ *      Milestone-1 awww, silence!
+ *      v0.95 - Hall error turns off all phases
  *
  */
 
@@ -108,8 +110,8 @@ volatile int sensor1;
 volatile int sensor2;
 volatile int sensor3;
 
-int duty[] = { 0, 15, 30, 45, 60, 75, 90, 115, 130, 145, 160, 190, 220, 245,
-		255 };
+int duty[] =
+		{ 0, 15, 30, 45, 60, 75, 90, 115, 130, 145, 160, 190, 220, 245, 255 };
 
 void measurement() {
 	HALL1
@@ -415,6 +417,12 @@ int main(void) {
 			if ((sensor1 == 0) && (sensor2 == 0) && (sensor3 == 1)) {
 				rotation(0);
 				phase = 0;
+			}
+
+			if (((sensor1 == 1) && (sensor2 == 1) && (sensor3 == 1))
+					|| ((sensor1 == 0) && (sensor2 == 0) && (sensor3 == 0))) {
+				ALL_OFF
+				_delay_ms(1000);
 			}
 		} else if (enable == 0 && kers == 1) {
 
