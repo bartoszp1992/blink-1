@@ -1,5 +1,5 @@
 Go to project settings>C/C++ Build>Settings>AVR C Linker. In general, add this other arguments: "-Wl,-u,vfprintf " In Libraries, add "m" and "printf_flt". 
 CPU freq: 2x8MHz
 uC: 2x Atmega 328P
-temp sensor: ?
+temp sensor: LM35 DZ probably
 LM345DT
